@@ -1,0 +1,151 @@
+DROP DATABASE IF EXISTS complaints;
+CREATE DATABASE IF NOT EXISTS complaints; 
+USE complaints;
+
+ALTER TABLE business MODIFY category varchar(255);
+
+
+drop table if exists business;
+create table if not exists business
+(
+	business_id int primary key not null,
+    business_name varchar(50),
+    category varchar(50),
+    zipcode char(5)
+    );
+    
+drop table if exists complaint;
+create table if not exists complaint
+(
+	complaint_id int primary key not null,
+    opened_date date,
+    complaint_type varchar(50),
+    resolve_status varchar(5),
+    business_id int not null,
+    FOREIGN KEY (business_id) references business(business_id) ON DELETE CASCADE 
+    );
+    
+    alter table business
+    add column zipcode char(5) after category;
+    
+    
+    insert into business (business_id, business_name, category, zipcode)
+    values 
+    (254645, "Washington State Employment Security Department",	"Government Agencies",	"98507"),	
+	(15489,	"Holland America Lines", "Travel", "98119"),	
+	(120419, "Amazon.com", "Electronic Shopping", "98108"),	
+	(280883, "QFC aka Quality Food Centers", "Retail Sales", "45202"),	
+	(21471, "Fred Meyer", "Retail Sales", "97242"),
+	(252306, "Redside Partners LLC", "Residential Landlord",	"98122"),
+	(300358, "Payless Foods", "Retail Sales", "98249"),
+	(55198,	"Chevron & Texaco Corporation", "Chemical Manufacturing", "94583"),
+	(83733,	"Costco", "Retail Sales", "98027"),
+	(234148, "Brown Paper Tickets", "Promoters of performing arts, sports & similar events", "98109")
+    ;
+    
+    select * from business;
+    
+    insert into complaint (complaint_id, opened_date, complaint_type, resolve_status, business_id)
+    values 
+    (572592, "2020-06-11", "Unemployment Fraud", "New", 254645),
+	(580507, "2020-05-11", "COVID-19", "New", 15489), 
+	(581327, "2020-10-14", "COVID-19", "New", 120419), 
+	(563844, "2020-03-25", "COVID-19", "New", 280883), 
+	(585945, "2020-12-24", "COVID Mask Compliance", "Closed", 21471), 
+	(585838, "2020-12-23", "COVID Mask Compliance", "Closed", 252306),
+	(583919, "2020-11-23", "COVID Mask Compliance", "Closed", 300358),
+	(583773, "2020-11-20", "COVID Mask Compliance", "Closed", 55198),
+	(583380, "2020-11-16", "COVID Mask Compliance", "Closed", 83733),
+	(577154, "2020-08-14", "COVID-19", "New", 234148)
+    ;
+
+select * from 
+business b 
+join
+complaint c on b.business_id = c.business_id
+where b.business_id = 254645;
+
+
+create or replace view v_covid_complaints_by_category AS
+    SELECT 
+        b.category, COUNT(c.complaint_id) as "total_complaints", c.complaint_type
+    FROM
+        business b
+            JOIN
+        complaint c ON b.business_id = c.business_id
+    WHERE
+        c.complaint_type LIKE ('%COVID%')
+    GROUP BY b.category;
+
+select * from complaints.v_covid_complaints_by_category;
+    
+    
+    
+    drop procedure if exists retail_complaints;
+    
+    delimiter $$
+    
+    create procedure retail_complaints()
+    Begin
+SELECT 
+    *
+FROM
+    complaint
+WHERE
+    business_id IN (SELECT 
+            business_id
+        FROM
+            business
+        WHERE
+            category = 'Retail Sales');
+end $$
+
+delimiter ; 
+		
+
+    drop function if exists f_days_open;
+    delimiter $$
+    create function f_days_open (p_complaint_id int) returns int 
+    deterministic no sql reads sql data
+    begin
+    
+    declare v_days_open int;
+    
+    select datediff(curdate(), c.opened_date)
+    into v_days_open from complaint c
+    where c.complaint_id = p_complaint_id;
+    
+    return v_days_open; 
+    end $$
+    
+    delimiter ;
+    
+    
+    select datediff(curdate(), opened_date) as days from complaint
+    where complaint_id = 572592;
+
+select f_days_open(572592);
+
+
+create or replace view v_resolution_timeline as 
+select 
+	c.complaint_id, 
+	b.business_name, 
+	c.business_id, 
+    c.opened_date,
+	case
+		when datediff(curdate(), opened_date) > 120 then 'Behind Schedule'
+		else 'On Schedule'
+	end as timeline
+from complaint c
+left join
+business b on c.business_id = b.business_id
+where 
+c.resolve_status = 'New' or 'Open';
+
+select * from complaints.v_resolution_timeline;
+
+
+
+
+
